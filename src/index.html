@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Document</title>
+</head>
+
+<body>
+  <button type="button">Start</button>
+  Audio fragments:
+  <ul></ul>
+  <script src="https://www.unpkg.com/assemblyai@4.4.2/dist/assemblyai.umd.min.js"></script>
+  <script>
+    const client = new assemblyai.AssemblyAI({
+      // don't actually store your API key in the client-side code
+      // send all your data to your own API, then from your API call the AssemblyAI API using your API key.
+      // this is just for debugging purposes.
+      apiKey: "[API_KEY]"
+    });
+    const audioFragmentsList = document.querySelector('ul');
+    let counter = 1;
+    let mediaRecorder;
+    let stream;
+
+    const sendAudioToServer = async (audioBlob) => {
+      console.log('Audio Blob', audioBlob);
+      addFragment(audioBlob);
+      const uploadedFileUrl = await client.files.upload(audioBlob);
+      console.log("Uploaded File URL", uploadedFileUrl);
+      const transcript = await client.transcripts.transcribe({
+        audio: uploadedFileUrl
+      });
+      console.log("Transcript", transcript);
+    };
+
+    const startRecording = async () => {
+      if (!navigator.mediaDevices?.getUserMedia) {
+        alert("Your browser does not support audio recording.");
+        return;
+      }
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mediaRecorder = new MediaRecorder(stream);
+
+      mediaRecorder.ondataavailable = async (event) => {
+        if (event.data.size > 0) {
+          sendAudioToServer(new Blob([event.data], { type: mediaRecorder.mimeType }));
+        }
+      };
+
+      mediaRecorder.start(5000); // Split the recording into 20-second chunks
+    };
+
+    function stopRecording() {
+      mediaRecorder.stop();
+      stream.getTracks() // get all tracks from the MediaStream
+        .forEach(track => track.stop()); // stop each of them
+    }
+
+    function addFragment(audioBlob) {
+      const audioFragmentLink = document.createElement('a');
+      audioFragmentLink.href = URL.createObjectURL(audioBlob);
+      audioFragmentLink.textContent = 'Download';
+      audioFragmentLink.download = `fragment-${counter}.${mediaRecorder.mimeType.match(/\/([\w\d]+);?/)[1]}`;
+      counter++;
+      const audioFragment = document.createElement('li');
+      audioFragment.appendChild(audioFragmentLink);
+      audioFragmentsList.appendChild(audioFragment);
+    }
+
+    document.querySelector('button').addEventListener('click', (e) => {
+      if (e.target.textContent === 'Start') {
+        e.target.textContent = 'Stop';
+        startRecording();
+      }
+      else {
+        e.target.textContent = 'Start';
+        stopRecording();
+      }
+    });
+  </script>
+</body>
+
+</html>
